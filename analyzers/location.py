@@ -12,7 +12,7 @@ def get_ip_location(ip_address, api_key):
     else:
         return f"Error fetching location, status code: {response.status_code}"
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     ip = input("Enter IP address: ")
     api_key = input("Enter your Geo.IPify API key: ")
     location = get_ip_location(ip, api_key)

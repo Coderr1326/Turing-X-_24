@@ -3,7 +3,14 @@
 venv/
 
 threat_score_app/threat_score_app/__pycache__/
-
+__pycache__/
 data/
 core/
 collectors/
+test/__pycache__/
+test/.env
+test/requirements.txt
+ip_analysis_8_8_8_8.json
+ip_threat_analyzer.py
+run_analysis.py
+test.zip
