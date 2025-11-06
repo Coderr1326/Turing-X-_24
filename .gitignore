@@ -1,0 +1,8 @@
+collectors/
+config/
+core/
+data/
+utils/
+venv/
+.env
+setup.py
