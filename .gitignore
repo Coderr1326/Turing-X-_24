@@ -1,6 +1,9 @@
-collectors/
-core/
-data/
-venv/
 .env
-setup.py
+
+venv/
+
+threat_score_app/threat_score_app/__pycache__/
+
+data/
+core/
+collectors/

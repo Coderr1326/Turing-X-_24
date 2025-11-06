@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Threat Analyzer - isMalicious</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 IP Threat Analyzer</h1>
+            <p>Powered by isMalicious.com - Multi-Source Threat Intelligence</p>
+        </div>
+        
+        <div class="search-box">
+            <input type="text" id="ipInput" placeholder="Enter IP address" autocomplete="off">
+            <button onclick="analyzeIP()">Analyze</button>
+        </div>
+        
+        <div id="loading" class="loading hidden">
+            <p>⏳ Analyzing IP...</p>
+        </div>
+        
+        <div id="error" class="error hidden"></div>
+        
+        <div id="result" class="result hidden">
+            <!-- Status -->
+            <div class="section status-section">
+                <h3>🎯 Status</h3>
+                <div id="statusBadge" class="status-badge"></div>
+            </div>
+            
+            <!-- Key Info -->
+            <div class="grid-2">
+                <div class="section">
+                    <h3>📊 Threat Level</h3>
+                    <div class="info-box">
+                        <div class="info-row">
+                            <label>Level:</label>
+                            <span id="threatLevel" class="badge">-</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Confidence:</label>
+                            <span id="confidence" class="score">0%</span>
+                        </div>
+                        <div class="info-row">
+                            <label>IP:</label>
+                            <span id="ipAddress">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>📈 Reputation Stats</h3>
+                    <div class="reputation-mini">
+                        <div class="rep-stat malicious">
+                            <span class="stat-value" id="repMalicious">0</span>
+                            <span class="stat-label">Malicious</span>
+                        </div>
+                        <div class="rep-stat suspicious">
+                            <span class="stat-value" id="repSuspicious">0</span>
+                            <span class="stat-label">Suspicious</span>
+                        </div>
+                        <div class="rep-stat harmless">
+                            <span class="stat-value" id="repHarmless">0</span>
+                            <span class="stat-label">Harmless</span>
+                        </div>
+                        <div class="rep-stat undetected">
+                            <span class="stat-value" id="repUndetected">0</span>
+                            <span class="stat-label">Undetected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Categories -->
+            <div class="section">
+                <h3>🏷️ Threat Categories</h3>
+                <div id="categoriesList" class="tags"></div>
+            </div>
+            
+            <!-- Detection Sources -->
+            <div class="section">
+                <h3>📚 Detection Sources (<span id="sourcesCountDisplay">0</span>)</h3>
+                <div id="sourcesList" class="sources-container"></div>
+            </div>
+            
+            <!-- Metadata -->
+            <div class="section">
+                <h3>ℹ️ Metadata</h3>
+                <div class="info-box">
+                    <div class="info-row">
+                        <label>Type:</label>
+                        <span id="ipType">-</span>
+                    </div>
+                    <div class="info-row">
+                        <label>Last Updated:</label>
+                        <span id="lastUpdated">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function analyzeIP() {
+            const ip = document.getElementById('ipInput').value.trim();
+            if (!ip) {
+                showError('Please enter an IP address');
+                return;
+            }
+            
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('result').classList.add('hidden');
+            
+            fetch(`/check/${ip}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('loading').classList.add('hidden');
+                    if (data.error) {
+                        showError('API Error: ' + (data.message || 'Unknown error'));
+                    } else {
+                        displayResult(data);
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loading').classList.add('hidden');
+                    showError('Error: ' + err.message);
+                });
+        }
+        
+        function showError(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove('hidden');
+        }
+        
+        function displayResult(data) {
+            // IP Address
+            document.getElementById('ipAddress').textContent = data.value || data.ip || '-';
+            
+            // Threat Level
+            const threatLevel = data.metadata?.threatLevel || 'unknown';
+            document.getElementById('threatLevel').textContent = threatLevel.toUpperCase();
+            document.getElementById('threatLevel').className = 'badge ' + threatLevel.toLowerCase();
+            
+            // Confidence Score
+            document.getElementById('confidence').textContent = data.confidenceScore + '%';
+            
+            // Reputation Stats
+            const rep = data.reputation || {};
+            document.getElementById('repMalicious').textContent = rep.malicious || 0;
+            document.getElementById('repSuspicious').textContent = rep.suspicious || 0;
+            document.getElementById('repHarmless').textContent = rep.harmless || 0;
+            document.getElementById('repUndetected').textContent = rep.undetected || 0;
+            
+            // Categories
+            if (data.categories && data.categories.length) {
+                const catHTML = data.categories.map(cat => `<span class="tag">${cat}</span>`).join('');
+                document.getElementById('categoriesList').innerHTML = catHTML;
+            }
+            
+            // Sources
+            if (data.sources && data.sources.length) {
+                document.getElementById('sourcesCountDisplay').textContent = data.sources.length;
+                const srcHTML = data.sources.map((src, i) => `
+                    <div class="source-item">
+                        <div class="source-header">
+                            <strong>${i+1}. ${src.name}</strong>
+                            <span class="source-status">${src.status}</span>
+                        </div>
+                        <div class="source-details">
+                            <span class="source-type">${src.type}</span>
+                            <span class="source-category">${src.category || 'N/A'}</span>
+                        </div>
+                        ${src.description ? `<div class="source-desc">${src.description}</div>` : ''}
+                        <a href="${src.url}" target="_blank" class="source-url">View Source →</a>
+                    </div>
+                `).join('');
+                document.getElementById('sourcesList').innerHTML = srcHTML;
+            }
+            
+            // Metadata
+            document.getElementById('ipType').textContent = data.type || '-';
+            document.getElementById('lastUpdated').textContent = new Date(data.lastUpdated).toLocaleString() || '-';
+            
+            // Status Badge
+            const badge = document.getElementById('statusBadge');
+            let status = '✅ SAFE';
+            let badgeClass = 'safe';
+            
+            if (threatLevel === 'critical') {
+                status = '🚨 CRITICAL THREAT';
+                badgeClass = 'critical';
+            } else if (threatLevel === 'high') {
+                status = '🚨 MALICIOUS';
+                badgeClass = 'dangerous';
+            } else if (threatLevel === 'medium') {
+                status = '⚠️ SUSPICIOUS';
+                badgeClass = 'suspicious';
+            } else if (threatLevel === 'low') {
+                status = '⚡ LOW RISK';
+                badgeClass = 'caution';
+            } else if ((rep.malicious || 0) > 0) {
+                status = '🚨 MALICIOUS';
+                badgeClass = 'dangerous';
+            }
+            
+            badge.className = 'status-badge ' + badgeClass;
+            badge.textContent = status;
+            
+            document.getElementById('result').classList.remove('hidden');
+        }
+        
+        document.getElementById('ipInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') analyzeIP();
+        });
+    </script>
+</body>
+</html>
