@@ -1,19 +1,21 @@
 from flask import Flask, request, jsonify, render_template
 import requests
-import base64
 import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
-
 # Get API keys from environment variables
-GEOLOCATION_API_KEY = os.getenv('GEOLOCATION_API_KEY')
 VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY')
 ALIENVAULT_API_KEY = os.getenv('ALIENVAULT_API_KEY')
 IPINFO_API_KEY = os.getenv('IPINFO_API_KEY')
+SHODAN_API_KEY = os.getenv('SHODAN_API_KEY')
+
+# Validate that all keys are loaded
+if not all([VIRUSTOTAL_API_KEY, ALIENVAULT_API_KEY, IPINFO_API_KEY, SHODAN_API_KEY]):
+    raise ValueError("Missing one or more API keys in .env file! Please check your .env configuration.")
+
 app = Flask(__name__)
 
 
@@ -23,31 +25,31 @@ app = Flask(__name__)
 def get_ipinfo_data(ip):
     """Query ipinfo.io API for geolocation and ASN"""
     try:
-        url = f"https://api.ipinfo.io/lite/{ip}?token={IPINFO_API_KEY}"
+        url = f"https://ipinfo.io/{ip}/json?token={IPINFO_API_KEY}"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             
+            loc = data.get('loc', ',').split(',')
+            latitude = loc[0] if len(loc) > 0 else 'N/A'
+            longitude = loc[1] if len(loc) > 1 else 'N/A'
+            
             return {
                 'ip': data.get('ip', ip),
-                'asn': data.get('asn', 'N/A'),
-                'as_name': data.get('as_name', 'N/A'),
-                'as_domain': data.get('as_domain', 'N/A'),
+                'city': data.get('city', 'N/A'),
+                'region': data.get('region', 'N/A'),
                 'country': data.get('country', 'N/A'),
-                'country_code': data.get('country_code', 'N/A'),
-                'continent': data.get('continent', 'N/A'),
-                'continent_code': data.get('continent_code', 'N/A'),
-                'city': 'N/A',  # Lite API doesn't include city
-                'region': 'N/A',
-                'timezone': 'N/A',
-                'latitude': 'N/A',
-                'longitude': 'N/A'
+                'timezone': data.get('timezone', 'N/A'),
+                'latitude': latitude,
+                'longitude': longitude,
+                'asn': data.get('org', 'N/A').split()[0] if data.get('org') else 'N/A',
+                'isp': data.get('org', 'N/A'),
             }
         else:
-            return {'ip': ip, 'asn': 'Error', 'as_name': 'Error', 'country': 'Error', 'city': 'N/A', 'region': 'N/A', 'timezone': 'N/A', 'latitude': 'N/A', 'longitude': 'N/A'}
+            return {'ip': ip, 'asn': 'Error', 'isp': 'Error', 'country': 'Error', 'city': 'N/A', 'region': 'N/A', 'timezone': 'N/A', 'latitude': 'N/A', 'longitude': 'N/A'}
     except Exception as e:
-        return {'ip': ip, 'asn': 'Error', 'as_name': str(e), 'country': 'Error', 'city': 'N/A', 'region': 'N/A', 'timezone': 'N/A', 'latitude': 'N/A', 'longitude': 'N/A'}
+        return {'ip': ip, 'asn': 'Error', 'isp': str(e), 'country': 'Error', 'city': 'N/A', 'region': 'N/A', 'timezone': 'N/A', 'latitude': 'N/A', 'longitude': 'N/A'}
 
 
 # ============================================
@@ -89,11 +91,10 @@ def get_virustotal_data(ip):
                 'suspicious': suspicious,
                 'harmless': harmless,
                 'undetected': undetected,
-                'details': f"Malicious: {malicious}, Suspicious: {suspicious}, Harmless: {harmless}",
-                'raw_data': data
+                'details': f"Malicious: {malicious}, Suspicious: {suspicious}, Harmless: {harmless}"
             }
         else:
-            return {'source': 'VirusTotal', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': 'API Error or No Data', 'error': True}
+            return {'source': 'VirusTotal', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': 'API Error', 'error': True}
     except Exception as e:
         return {'source': 'VirusTotal', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': str(e), 'error': True}
 
@@ -112,7 +113,6 @@ def get_alienvault_data(ip):
             data = response.json()
             pulse_count = data.get('pulse_info', {}).get('count', 0)
             
-            # If IP is in pulses, it's likely malicious
             detected = pulse_count > 0
             score = min(pulse_count * 10, 100) if detected else 0
             
@@ -129,13 +129,67 @@ def get_alienvault_data(ip):
                 'suspicious': 0,
                 'harmless': 0 if detected else 1,
                 'undetected': 0,
-                'details': f"Found in {pulse_count} threat pulses",
-                'raw_data': data
+                'details': f"Found in {pulse_count} threat pulses"
             }
         else:
-            return {'source': 'AlienVault OTX', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': 'API Error or No Data', 'error': True}
+            return {'source': 'AlienVault OTX', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': 'No Data', 'error': True}
     except Exception as e:
         return {'source': 'AlienVault OTX', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': str(e), 'error': True}
+
+
+# ============================================
+# SHODAN API
+# ============================================
+def get_shodan_data(ip):
+    """Query Shodan API for exposed services and ports"""
+    url = f"https://api.shodan.io/shodan/host/{ip}?key={SHODAN_API_KEY}"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            
+            ports = data.get('ports', [])
+            vulns = data.get('vulns', [])
+            hostnames = data.get('hostnames', [])
+            org = data.get('org', 'N/A')
+            isp = data.get('isp', 'N/A')
+            
+            port_count = len(ports)
+            vuln_count = len(vulns)
+            
+            score = 0
+            detected = False
+            categories = []
+            
+            if vuln_count > 0:
+                score = min(vuln_count * 20, 100)
+                detected = True
+                categories.append('vulnerable-services')
+            elif port_count > 10:
+                score = 30
+                detected = True
+                categories.append('exposed-services')
+            
+            return {
+                'source': 'Shodan',
+                'detected': detected,
+                'score': score,
+                'categories': categories,
+                'malicious': vuln_count,
+                'suspicious': 1 if port_count > 10 else 0,
+                'harmless': 0 if detected else 1,
+                'undetected': 0,
+                'details': f"Open Ports: {port_count}, Vulnerabilities: {vuln_count}",
+                'ports': ports[:10],
+                'hostnames': hostnames,
+                'org': org,
+                'isp': isp
+            }
+        else:
+            return {'source': 'Shodan', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': 'No Data', 'error': True}
+    except Exception as e:
+        return {'source': 'Shodan', 'detected': False, 'score': 0, 'categories': [], 'malicious': 0, 'suspicious': 0, 'harmless': 0, 'undetected': 0, 'details': str(e), 'error': True}
 
 
 # ============================================
@@ -153,10 +207,10 @@ def aggregate_threat_data(sources_data):
     total_harmless = 0
     total_undetected = 0
     
-    # Weight each source
     source_weights = {
-        'VirusTotal': 2.0,  # Highest weight
-        'AlienVault OTX': 1.0
+        'VirusTotal': 2.0,
+        'AlienVault OTX': 1.5,
+        'Shodan': 1.0
     }
     
     for source in sources_data:
@@ -170,18 +224,14 @@ def aggregate_threat_data(sources_data):
             
             all_categories.update(source.get('categories', []))
             
-            # Aggregate reputation stats
             total_malicious += source.get('malicious', 0)
             total_suspicious += source.get('suspicious', 0)
             total_harmless += source.get('harmless', 0)
             total_undetected += source.get('undetected', 0)
     
-    # Calculate aggregated score
     aggregated_score = int(total_score / total_weight) if total_weight > 0 else 0
     
-    # Determine threat level based on ACTUAL DETECTIONS and SCORE
     if total_malicious > 0:
-        # If ANY source detected malicious, classify based on score
         if aggregated_score >= 70:
             threat_level = 'critical'
         elif aggregated_score >= 50:
@@ -195,11 +245,10 @@ def aggregate_threat_data(sources_data):
     else:
         threat_level = 'safe'
     
-    # Calculate confidence (100% if any detections, scaled by agreement)
     if detected_count > 0:
         confidence = max(50, int((detected_count / len([s for s in sources_data if not s.get('error')])) * 100))
     else:
-        confidence = 100  # 100% confident it's safe if no detections
+        confidence = 100
     
     return {
         'aggregatedScore': aggregated_score,
@@ -223,43 +272,22 @@ def aggregate_threat_data(sources_data):
 def get_complete_ip_analysis(ip):
     """Combine all sources and return unified threat profile"""
     
-    # Query all sources
     virustotal_result = get_virustotal_data(ip)
     alienvault_result = get_alienvault_data(ip)
-    
-    # Get IPInfo data for geolocation + ASN
+    shodan_result = get_shodan_data(ip)
     ipinfo_data = get_ipinfo_data(ip)
     
-    # Combine threat intelligence sources
-    multi_source_data = [virustotal_result, alienvault_result]
-    
-    # Aggregate the data
+    multi_source_data = [virustotal_result, alienvault_result, shodan_result]
     aggregated = aggregate_threat_data(multi_source_data)
     
-    # Build unified response
     unified_response = {
         'ip': ip,
         'value': ip,
         **aggregated,
         'multiSourceData': multi_source_data,
-        'geolocation': {
-            'country': ipinfo_data.get('country', 'N/A'),
-            'country_code': ipinfo_data.get('country_code', 'N/A'),
-            'continent': ipinfo_data.get('continent', 'N/A'),
-            'city': ipinfo_data.get('city', 'N/A'),
-            'region': ipinfo_data.get('region', 'N/A'),
-            'timezone': ipinfo_data.get('timezone', 'N/A'),
-            'latitude': ipinfo_data.get('latitude', 'N/A'),
-            'longitude': ipinfo_data.get('longitude', 'N/A'),
-            'asn': ipinfo_data.get('asn', 'N/A'),
-            'isp': ipinfo_data.get('as_name', 'N/A'),
-            'as_domain': ipinfo_data.get('as_domain', 'N/A')
-        },
+        'geolocation': ipinfo_data,
         'type': 'IPv4',
-        'lastUpdated': '2025-11-07T00:08:00Z',
-        'metadata': {
-            'threatLevel': aggregated['threatLevel']
-        }
+        'lastUpdated': '2025-11-07T03:15:00Z'
     }
     
     return unified_response
@@ -276,19 +304,6 @@ def index():
 @app.route('/check/<ip>', methods=['GET'])
 def check_ip(ip):
     """Main endpoint for IP analysis"""
-    result = get_complete_ip_analysis(ip)
-    return jsonify(result)
-
-
-@app.route('/check', methods=['POST'])
-def check_ip_post():
-    """POST endpoint for IP analysis"""
-    data = request.get_json()
-    ip = data.get('ip')
-    
-    if not ip:
-        return jsonify({'error': True, 'message': 'IP address required'}), 400
-    
     result = get_complete_ip_analysis(ip)
     return jsonify(result)
 

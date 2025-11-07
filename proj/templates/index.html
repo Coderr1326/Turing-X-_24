@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICE v2.0 - Threat Intelligence Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Leaflet.js for Interactive Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo">🔥</div>
+                <div>
+                    <h1>TICE v2.0</h1>
+                    <p class="subtitle">AI-Driven Threat Intelligence Correlation Engine</p>
+                </div>
+            </div>
+            <div class="header-info">
+                <span class="badge-ai">🤖 AI-Powered</span>
+                <span class="data-sources">VirusTotal • Shodan • IPInfo</span>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <div class="search-box">
+                <input type="text" id="ipInput" placeholder="Enter IP address (e.g., 8.8.8.8)" autocomplete="off">
+                <button onclick="analyzeIP()" class="btn-primary">
+                    <span>🔍 Analyze Threat</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading hidden">
+            <div class="loader"></div>
+            <p>⏳ Analyzing IP across multiple threat intelligence sources...</p>
+            <p class="loading-sub">AI categorization in progress...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="error hidden"></div>
+
+        <!-- Results Section -->
+        <div id="result" class="result hidden">
+            
+            <!-- Threat Overview -->
+            <div class="threat-overview">
+                <div id="statusBadge" class="status-badge"></div>
+                <div class="threat-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="aggregatedScore">0</div>
+                        <div class="stat-label">Threat Score</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="confidence">0%</div>
+                        <div class="stat-label">Confidence</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="detectionCount">0/2</div>
+                        <div class="stat-label">Sources Detected</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Categorization -->
+            <div class="section ai-section">
+                <h3>🤖 AI Threat Categorization</h3>
+                <div id="aiCategories" class="ai-categories">
+                    <div class="no-threat">No threats detected by AI model</div>
+                </div>
+            </div>
+
+            <!-- Interactive Map -->
+            <div class="section map-section">
+                <h3>🌍 Geolocation Map</h3>
+                <div id="map" class="map-container"></div>
+                <div class="geo-info">
+                    <div class="geo-item">
+                        <strong>📍 Location:</strong>
+                        <span id="mapLocation">-</span>
+                    </div>
+                    <div class="geo-item">
+                        <strong>🏢 ISP:</strong>
+                        <span id="mapISP">-</span>
+                    </div>
+                    <div class="geo-item">
+                        <strong>🔢 ASN:</strong>
+                        <span id="mapASN">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid Layout for Details -->
+            <div class="grid-2">
+                <!-- Threat Analysis -->
+                <div class="section">
+                    <h3>📊 Threat Analysis</h3>
+                    <div class="info-card">
+                        <div class="info-row">
+                            <label>IP Address:</label>
+                            <span id="ipAddress" class="mono">-</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Threat Level:</label>
+                            <span id="threatLevel" class="badge">-</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Is Malicious?</label>
+                            <span id="isMalicious">-</span>
+                        </div>
+                        <div class="info-row">
+                            <label>Analysis Time:</label>
+                            <span id="timestamp" class="small-text">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detection Stats -->
+                <div class="section">
+                    <h3>📈 Detection Statistics</h3>
+                    <div class="reputation-grid">
+                        <div class="rep-box malicious">
+                            <div class="rep-value" id="repMalicious">0</div>
+                            <div class="rep-label">Malicious</div>
+                        </div>
+                        <div class="rep-box suspicious">
+                            <div class="rep-value" id="repSuspicious">0</div>
+                            <div class="rep-label">Suspicious</div>
+                        </div>
+                        <div class="rep-box harmless">
+                            <div class="rep-value" id="repHarmless">0</div>
+                            <div class="rep-label">Harmless</div>
+                        </div>
+                        <div class="rep-box undetected">
+                            <div class="rep-value" id="repUndetected">0</div>
+                            <div class="rep-label">Undetected</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Threat Categories -->
+            <div class="section">
+                <h3>🏷️ Detected Threat Categories</h3>
+                <div id="categoriesList" class="tags-container">
+                    <span class="tag safe">No threats detected</span>
+                </div>
+            </div>
+
+            <!-- Multi-Source Intelligence -->
+            <div class="section">
+                <h3>📚 Multi-Source Intelligence</h3>
+                <div id="multiSourceList" class="sources-grid"></div>
+            </div>
+
+            <!-- Attribution Report -->
+            <div class="section">
+                <h3>🎯 Threat Attribution</h3>
+                <div class="info-card">
+                    <div class="info-row">
+                        <label>Geolocation:</label>
+                        <span id="attrGeo">-</span>
+                    </div>
+                    <div class="info-row">
+                        <label>ASN:</label>
+                        <span id="attrASN" class="mono">-</span>
+                    </div>
+                    <div class="info-row">
+                        <label>Related Domains:</label>
+                        <span id="relatedDomains">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🔒 TICE v2.0 - Threat Intelligence Correlation Engine</p>
+            <p class="footer-small">AI-Powered • Multi-Source • Real-Time Analysis</p>
+        </footer>
+    </div>
+
+    <script>
+        let map = null;
+        let marker = null;
+
+        function analyzeIP() {
+            const ip = document.getElementById('ipInput').value.trim();
+            if (!ip) {
+                showError('Please enter an IP address');
+                return;
+            }
+
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+            if (!ipPattern.test(ip)) {
+                showError('Please enter a valid IP address');
+                return;
+            }
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('result').classList.add('hidden');
+
+            fetch(`/check/${ip}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('loading').classList.add('hidden');
+                    if (data.error) {
+                        showError('Error: ' + (data.message || 'Unknown error'));
+                    } else {
+                        displayResult(data);
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loading').classList.add('hidden');
+                    showError('Network Error: ' + err.message);
+                });
+        }
+
+        function showError(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = '❌ ' + msg;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function displayResult(data) {
+            console.log('API Response:', data);
+
+            // Basic Info
+            document.getElementById('ipAddress').textContent = data.ip || '-';
+            document.getElementById('timestamp').textContent = new Date(data.timestamp).toLocaleString() || '-';
+            
+            // Threat Level
+            const threatLevel = data.threatLevel || 'unknown';
+            document.getElementById('threatLevel').textContent = threatLevel.toUpperCase();
+            document.getElementById('threatLevel').className = 'badge badge-' + threatLevel;
+
+            // Scores
+            document.getElementById('aggregatedScore').textContent = (data.aggregatedScore || 0);
+            document.getElementById('confidence').textContent = (data.confidenceScore || 0) + '%';
+            document.getElementById('detectionCount').textContent = (data.detectionCount || 0) + '/2';
+
+            // Is Malicious
+            const isMal = data.attribution?.isMalicious;
+            document.getElementById('isMalicious').textContent = isMal ? '⚠️ YES' : '✅ NO';
+            document.getElementById('isMalicious').style.color = isMal ? '#DC143C' : '#00FF7F';
+            document.getElementById('isMalicious').style.fontWeight = 'bold';
+
+            // Reputation Stats
+            const rep = data.reputation || {};
+            document.getElementById('repMalicious').textContent = rep.malicious || 0;
+            document.getElementById('repSuspicious').textContent = rep.suspicious || 0;
+            document.getElementById('repHarmless').textContent = rep.harmless || 0;
+            document.getElementById('repUndetected').textContent = rep.undetected || 0;
+
+            // Status Badge
+            const badge = document.getElementById('statusBadge');
+            let statusText = '✅ SAFE';
+            let badgeClass = 'safe';
+
+            if (threatLevel === 'critical') {
+                statusText = '🚨 CRITICAL THREAT';
+                badgeClass = 'critical';
+            } else if (threatLevel === 'high') {
+                statusText = '⚠️ HIGH RISK';
+                badgeClass = 'high';
+            } else if (threatLevel === 'medium') {
+                statusText = '⚠️ SUSPICIOUS';
+                badgeClass = 'medium';
+            } else if (threatLevel === 'low') {
+                statusText = '⚡ LOW RISK';
+                badgeClass = 'low';
+            }
+
+            badge.textContent = statusText;
+            badge.className = 'status-badge status-' + badgeClass;
+
+            // AI Categorization
+            const aiCat = data.aiCategorization;
+            if (aiCat && aiCat.categories && aiCat.categories.length > 0) {
+                const aiHTML = aiCat.categories.map(cat => {
+                    const score = aiCat.confidence_scores[cat.split(' / ')[0]] || 50;
+                    return `
+                        <div class="ai-category">
+                            <div class="ai-cat-name">${cat}</div>
+                            <div class="ai-cat-bar">
+                                <div class="ai-cat-fill" style="width: ${score}%"></div>
+                            </div>
+                            <div class="ai-cat-score">${score}% confidence</div>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('aiCategories').innerHTML = aiHTML;
+            } else {
+                document.getElementById('aiCategories').innerHTML = '<div class="no-threat">✅ No threats detected by AI model</div>';
+            }
+
+            // Threat Categories Tags
+            if (data.categories && data.categories.length > 0) {
+                const catHTML = data.categories.map(cat => `<span class="tag">${cat}</span>`).join('');
+                document.getElementById('categoriesList').innerHTML = catHTML;
+            } else {
+                document.getElementById('categoriesList').innerHTML = '<span class="tag safe">✅ No threats detected</span>';
+            }
+
+            // Multi-Source Data
+            if (data.multiSourceData && data.multiSourceData.length > 0) {
+                const srcHTML = data.multiSourceData.map((src, i) => {
+                    const statusClass = src.detected ? 'detected' : 'clean';
+                    const statusText = src.detected ? '🚨 DETECTED' : '✅ CLEAN';
+                    
+                    let detailsHTML = '';
+                    if (src.rate_limited) {
+                        detailsHTML = '<div class="source-desc rate-limited">⏰ Rate Limited - Try again later</div>';
+                    } else if (src.error) {
+                        detailsHTML = '<div class="source-desc error">❌ API Error or No Data</div>';
+                    } else {
+                        detailsHTML = `<div class="source-desc">${src.details || 'No additional details'}</div>`;
+                    }
+                    
+                    return `
+                        <div class="source-card ${statusClass}">
+                            <div class="source-header">
+                                <strong>${i+1}. ${src.source}</strong>
+                                <span class="source-status">${statusText}</span>
+                            </div>
+                            <div class="source-score">Score: ${src.score || 0}/100</div>
+                            ${detailsHTML}
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('multiSourceList').innerHTML = srcHTML;
+            }
+
+            // Attribution
+            document.getElementById('attrGeo').textContent = data.attribution?.geolocation || '-';
+            document.getElementById('attrASN').textContent = data.attribution?.asn || '-';
+            document.getElementById('relatedDomains').textContent = data.attribution?.relatedDomains?.join(', ') || 'None';
+
+            // Map
+            const geo = data.geolocation || {};
+            const lat = parseFloat(geo.latitude);
+            const lon = parseFloat(geo.longitude);
+
+            document.getElementById('mapLocation').textContent = `${geo.city}, ${geo.country}` || '-';
+            document.getElementById('mapISP').textContent = geo.isp || '-';
+            document.getElementById('mapASN').textContent = geo.asn || '-';
+
+            // ✅ FIX: Show results first, then initialize map
+            document.getElementById('result').classList.remove('hidden');
+
+            // ✅ FIX: Initialize map AFTER result div is visible with setTimeout
+            if (!isNaN(lat) && !isNaN(lon)) {
+                setTimeout(() => {
+                    initMap(lat, lon, data.ip, geo.city, geo.country);
+                }, 100);
+            }
+        }
+
+        function initMap(lat, lon, ip, city, country) {
+            // ✅ FIX: Remove old map properly
+            if (map) {
+                map.off();
+                map.remove();
+                map = null;
+            }
+
+            // ✅ FIX: Initialize map with proper settings
+            try {
+                map = L.map('map', {
+                    center: [lat, lon],
+                    zoom: 6,
+                    scrollWheelZoom: true,
+                    dragging: true,
+                    zoomControl: true
+                });
+
+                // Add tile layer
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 18
+                }).addTo(map);
+
+                // Add marker with styled popup
+                marker = L.marker([lat, lon]).addTo(map)
+                    .bindPopup(`
+                        <div style="font-family: Inter, sans-serif;">
+                            <strong style="color: #DC143C; font-size: 14px;">${ip}</strong><br>
+                            <span style="font-size: 12px;">${city}, ${country}</span>
+                        </div>
+                    `)
+                    .openPopup();
+
+                // ✅ FIX: Force map to recalculate size after render
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 200);
+
+            } catch (error) {
+                console.error('Map initialization error:', error);
+            }
+        }
+
+        // Enter key support
+        document.getElementById('ipInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') analyzeIP();
+        });
+    </script>
+</body>
+</html>

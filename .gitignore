@@ -14,3 +14,9 @@ ip_analysis_8_8_8_8.json
 ip_threat_analyzer.py
 run_analysis.py
 test.zip
+test/
+proj/.env
+proj/requirements.txt
+test/app_integrated.py
+
+TICE-Complete-Project.md
